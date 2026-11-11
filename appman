@@ -2,7 +2,7 @@
 
 # Appman — Android package manager for Termux + root
 # Dynamic Android profile discovery.
-# Default: Android user 0, third-party applications.
+# Default: Android user 0, third-party applications, sorted by Latest.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SELF="$SCRIPT_DIR/appman"
@@ -16,6 +16,9 @@ SHORTCUT_FILE="$HOME/.appman.shortcuts.$$"
 
 USER_ID=0
 FILTER=user
+SORT_MODE=latest
+NEED_REFRESH=1
+CACHED_RAW=''
 
 cleanup() {
   rm -f "$STATE_FILE" "$PROFILE_FILE" "$TAB_MAP" "$SHORTCUT_FILE"
@@ -45,8 +48,7 @@ fi
 # DYNAMIC TAB AND SHORTCUT GENERATION
 # --------------------------------------------------
 
-HEADER=''
-EXPECT_KEYS='enter,ctrl-f,ctrl-t,alt-u,alt-y'
+HEADER_PLAIN=''
 PROFILE_COUNT=0
 
 : > "$TAB_MAP"
@@ -57,14 +59,14 @@ add_tab() {
   tab_value=$2
   tab_label=$3
 
-  [ -n "$HEADER" ] && HEADER="$HEADER "
+  [ -n "$HEADER_PLAIN" ] && HEADER_PLAIN="$HEADER_PLAIN "
 
-  tab_start=$((${#HEADER} + 1))
-  HEADER="${HEADER}[$tab_label]"
-  tab_end=${#HEADER}
+  tab_start=$((${#HEADER_PLAIN} + 1))
+  HEADER_PLAIN="${HEADER_PLAIN}[$tab_label]"
+  tab_end=${#HEADER_PLAIN}
 
-  printf '%s %s %s %s\n' \
-    "$tab_start" "$tab_end" "$tab_kind" "$tab_value" >> "$TAB_MAP"
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "$tab_start" "$tab_end" "$tab_kind" "$tab_value" "$tab_label" >> "$TAB_MAP"
 }
 
 while IFS="$(printf '\t')" read -r id label type name; do
@@ -76,43 +78,109 @@ while IFS="$(printf '\t')" read -r id label type name; do
   add_tab profile "$id" "$label"
 
   if [ "$PROFILE_COUNT" -le 9 ]; then
-    shortcut="alt-$PROFILE_COUNT"
-    EXPECT_KEYS="$EXPECT_KEYS,$shortcut"
-    printf '%s\t%s\n' "$shortcut" "$id" >> "$SHORTCUT_FILE"
+    printf '%s\t%s\n' "$PROFILE_COUNT" "$id" >> "$SHORTCUT_FILE"
   fi
 done < "$PROFILE_FILE"
 
 add_tab filter user USER
 add_tab filter system SYSTEM
+add_tab sort latest LATEST
+add_tab sort name NAME
 
 if [ "$PROFILE_COUNT" -eq 0 ]; then
   printf 'Appman: no usable Android profiles found.\n'
   exit 1
 fi
 
+render_header() {
+  awk -F '\t' -v uid="$USER_ID" -v flt="$FILTER" -v srt="$SORT_MODE" '
+    {
+      kind = $3
+      val = $4
+      lbl = $5
+      active = ((kind == "profile" && val == uid) || (kind == "filter" && val == flt) || (kind == "sort" && val == srt))
+      if (NR > 1) printf " "
+      if (active)
+        printf "\033[1;36m[%s]\033[0m", lbl
+      else
+        printf "\033[0;37m[%s]\033[0m", lbl
+    }
+    END { printf "\n\033[1;33mspace\033[0;90m:Sel \033[1;33mf\033[0;90m:Frz \033[1;33me\033[0;90m:Ena \033[1;33md\033[0;90m:Del \033[1;33mi\033[0;90m:Info \033[1;33m/\033[0;90m:Find \033[1;33m?\033[0;90m:Help \033[1;33mq\033[0;90m:Quit\033[0m\n" }
+  ' "$TAB_MAP"
+}
+
 # --------------------------------------------------
-# PACKAGE LISTING
+# PACKAGE FETCHING & SORTING
 # --------------------------------------------------
 
-list_packages() {
+fetch_packages_raw() {
   case "$2" in
     user) flag=-3 ;;
     system) flag=-s ;;
     *) return 2 ;;
   esac
 
-  sudo cmd package list packages --user "$1" "$flag" 2>/dev/null |
-    sed 's/^package://' | sort -f
+  pkgs=$(sudo cmd package list packages --user "$1" "$flag" 2>/dev/null | sed 's/^package://')
+  [ -n "$pkgs" ] || return 0
+
+  disabled=$(sudo cmd package list packages --user "$1" -d 2>/dev/null | sed 's/^package://')
+
+  sudo dumpsys package packages 2>/dev/null |
+    awk -v list="$pkgs" -v dis="$disabled" '
+      BEGIN {
+        n = split(list, arr, "\n")
+        for (i = 1; i <= n; i++) {
+          if (arr[i] != "") target[arr[i]] = 1
+        }
+        m = split(dis, darr, "\n")
+        for (i = 1; i <= m; i++) {
+          if (darr[i] != "") frozen[darr[i]] = 1
+        }
+      }
+      /^[[:space:]]*Package \[/ {
+        line = $0
+        sub(/^[[:space:]]*Package \[/, "", line)
+        sub(/\].*$/, "", line)
+        cur = (line in target) ? line : ""
+        next
+      }
+      cur != "" && /^[[:space:]]*lastUpdateTime=/ {
+        line = $0
+        sub(/^[[:space:]]*lastUpdateTime=/, "", line)
+        sub(/[[:space:]]*$/, "", line)
+        if (!(cur in ts) || line > ts[cur]) {
+          ts[cur] = line
+        }
+        next
+      }
+      END {
+        for (p in target) {
+          t = (p in ts) ? ts[p] : "0000-00-00 00:00:00"
+          icon = (p in frozen) ? "\033[1;36m\033[0m" : " "
+          printf "%s\t%s\t%s\n", t, icon, p
+        }
+      }
+    '
+}
+
+format_display_packages() {
+  case "$SORT_MODE" in
+    name)
+      printf '%s\n' "$CACHED_RAW" |
+        sort -t "$(printf '\t')" -k3,3f |
+        cut -f2-
+      ;;
+    *)
+      printf '%s\n' "$CACHED_RAW" |
+        sort -t "$(printf '\t')" -k1,1r -k3,3f |
+        cut -f2-
+      ;;
+  esac
 }
 
 get_profile_name() {
   awk -F '\t' -v id="$USER_ID" \
     '$1 == id { print $4; exit }' "$PROFILE_FILE"
-}
-
-get_profile_label() {
-  awk -F '\t' -v id="$USER_ID" \
-    '$1 == id { print $2; exit }' "$PROFILE_FILE"
 }
 
 # --------------------------------------------------
@@ -132,8 +200,8 @@ show_help() {
 
     index=$((index + 1))
     if [ "$index" -le 9 ]; then
-      printf '│   ALT-%s / [%s]  %s (ID %s)\n' \
-        "$index" "$label" "$name" "$id"
+      printf '│   %s / ALT-%s / [%s]  %s (ID %s)\n' \
+        "$index" "$index" "$label" "$name" "$id"
     else
       printf '│   [%s]  %s (ID %s)\n' "$label" "$name" "$id"
     fi
@@ -141,29 +209,31 @@ show_help() {
 
   cat <<'HELP'
 │                                                            │
-│ APP FILTERS                                                 │
-│   ALT-U        User-installed apps                          │
-│   ALT-Y        System apps                                   │
+│ APP FILTERS & SORTING                                      │
+│   TAB / s      Toggle User / System apps                    │
+│   ALT-U / Y    User-installed / System apps                 │
+│   o / ALT-O    Toggle Sort: [LATEST] <-> [NAME]             │
 │                                                            │
-│ NAVIGATION                                                   │
-│   UP / DOWN    Navigate                                      │
+│ YAZI NAVIGATION & SELECTION                                 │
+│   j / DOWN     Move down                                    │
+│   k / UP       Move up                                      │
+│   g / G        Jump to top / bottom                         │
+│   CTRL-D / U   Half-page down / up                          │
 │   SPACE        Select / deselect                             │
-│   U            Clear selections                              │
-│   ENTER        Uninstall selected / current app              │
+│   u            Clear selections                              │
 │                                                            │
 │ ACTIONS                                                      │
-│   CTRL-F       Freeze selected apps                         │
-│   CTRL-T       Enable selected apps                         │
-│   CTRL-R       Toggle search                                │
-│   ESC          Clear search                                 │
+│   f / CTRL-F   Freeze selected / current app                │
+│   e / CTRL-T   Enable selected / current app                │
+│   d / x / RET  Uninstall selected / current app             │
+│   r            Refresh package list                         │
+│   i            Open Android App Info page                   │
+│   / / CTRL-R   Open search bar                              │
+│   RET (Search) Lock search filter & hide search bar         │
+│   ESC          Clear search & hide search bar               │
 │   ?            Show help                                    │
-│   CTRL-Q       Quit                                         │
+│   q / CTRL-Q   Quit                                         │
 │               Disabled / frozen indicator                  │
-│                                                            │
-│ SAFETY                                                       │
-│   No select-all shortcut exists.                            │
-│   Profile changes clear selections.                         │
-│   Actions target only the active Android user.              │
 ╰────────────────────────────────────────────────────────────╯
 HELP
 
@@ -198,6 +268,7 @@ run_action() {
           pm disable-user --user "$user" "$pkg"
         done
       ' sh "$target_user"
+      NEED_REFRESH=1
       ;;
 
     enable)
@@ -210,6 +281,7 @@ run_action() {
           pm enable --user "$user" "$pkg"
         done
       ' sh "$target_user"
+      NEED_REFRESH=1
       ;;
 
     uninstall)
@@ -235,6 +307,7 @@ run_action() {
           ' sh "$target_user"
 
           printf '\n\033[1;32mUninstall operation finished.\033[0m\n'
+          NEED_REFRESH=1
           ;;
 
         *)
@@ -259,83 +332,122 @@ case "$1" in
     ;;
 esac
 
+NORMAL_KEYS='j,k,g,G,space,u,f,e,d,x,i,r,s,o,tab,btab,q,?,/,1,2,3,4,5,6,7,8,9'
+
 while :; do
   profile_name=$(get_profile_name)
-  profile_label=$(get_profile_label)
-
   [ -n "$profile_name" ] || profile_name="Android user $USER_ID"
 
   case "$FILTER" in
-    user) filter_label='User apps' ;;
-    system) filter_label='System apps' ;;
+    user)
+      filter_label='User apps'
+      next_filter='system'
+      ;;
+    system)
+      filter_label='System apps'
+      next_filter='user'
+      ;;
     *)
       FILTER=user
       filter_label='User apps'
+      next_filter='system'
       ;;
   esac
 
-  # Package queries happen only for the active profile.
-  packages=$(list_packages "$USER_ID" "$FILTER")
+  case "$SORT_MODE" in
+    name) next_sort='latest' ;;
+    *)
+      SORT_MODE='latest'
+      next_sort='name'
+      ;;
+  esac
 
-  if [ -z "$packages" ]; then
-    printf '\nNo packages found in %s / %s.\n' \
-      "$profile_name" "$filter_label"
-    printf 'Press ENTER to return...'
-    read -r _ </dev/tty
-    continue
+  if [ "$NEED_REFRESH" -eq 1 ] || [ -z "$CACHED_RAW" ]; then
+    CACHED_RAW=$(fetch_packages_raw "$USER_ID" "$FILTER")
+
+    if [ -z "$CACHED_RAW" ]; then
+      printf '\nNo packages found in %s / %s.\n' \
+        "$profile_name" "$filter_label"
+      printf 'Press ENTER to return...'
+      read -r _ </dev/tty
+      FILTER=user
+      USER_ID=0
+      NEED_REFRESH=1
+      continue
+    fi
+
+    NEED_REFRESH=0
   fi
 
-  # Fetch disabled packages once per active profile.
-  disabled_packages=$(
-    sudo cmd package list packages --user "$USER_ID" -d 2>/dev/null |
-      sed 's/^package://'
-  )
-
-  display_packages=$(printf '%s\n' "$packages" |
-    awk -v disabled="$disabled_packages" '
-      BEGIN {
-        n = split(disabled, items, "\n")
-        for (i = 1; i <= n; i++)
-          if (items[i] != "") frozen[items[i]] = 1
-      }
-      {
-        if ($0 in frozen)
-          printf "\033[1;36m\033[0m\t%s\n", $0
-        else
-          printf " \t%s\n", $0
-      }
-    ')
+  DISPLAY_LIST=$(format_display_packages)
 
   : > "$STATE_FILE"
 
-  prompt="📱 ${profile_name} · ${filter_label} > "
+  HEADER_COLORED=$(render_header)
 
-  click_bind="click-header:execute-silent(col=\$FZF_CLICK_HEADER_COLUMN; awk -v c=\$col '\$1 <= c && c <= \$2 {print \$3, \$4; exit}' '$TAB_MAP' > '$STATE_FILE')+abort"
+  click_bind="click-header:execute-silent(col=\$FZF_CLICK_HEADER_COLUMN; awk -F '\t' -v c=\$col 'ENVIRON["FZF_CLICK_HEADER_LINE"] != 2 && \$1 <= c && c <= \$2 {print \$3, \$4; exit}' '$TAB_MAP' > '$STATE_FILE')+abort"
+  enter_bind="enter:transform:case \"\$FZF_PROMPT\" in *Search*) printf 'hide-input+disable-search+change-prompt()+rebind($NORMAL_KEYS)' ;; *) printf \"execute-silent(printf 'action uninstall\\n' > '$STATE_FILE')+accept\" ;; esac"
+  ctrl_r_bind="ctrl-r:transform:case \"\$FZF_PROMPT\" in *Search*) printf 'hide-input+disable-search+change-prompt()+rebind($NORMAL_KEYS)' ;; *) printf 'show-input+enable-search+clear-query+change-prompt(🔍 Search > )+unbind($NORMAL_KEYS)' ;; esac"
 
-  result=$(printf '%s\n' "$display_packages" | fzf \
+  result=$(printf '%s\n' "$DISPLAY_LIST" | fzf \
     --multi \
     --reverse \
     --ansi \
     --delimiter='\t' \
     --disabled \
-    --prompt="$prompt" \
-    --header="$HEADER" \
+    --prompt='' \
+    --header="$HEADER_COLORED" \
     --header-first \
     --preview="'$PREVIEW' '$USER_ID' {2}" \
-    --preview-window='bottom:7:wrap' \
-    --expect="$EXPECT_KEYS" \
+    --preview-window='bottom:7:wrap:noinfo' --preview-label-pos='2' --bind='start:hide-input+transform-preview-label:printf "[ %s/%s (%s) ]" "${FZF_MATCH_COUNT:-0}" "${FZF_TOTAL_COUNT:-0}" "${FZF_SELECT_COUNT:-0}"' --bind='result:transform-preview-label:printf "[ %s/%s (%s) ]" "${FZF_MATCH_COUNT:-0}" "${FZF_TOTAL_COUNT:-0}" "${FZF_SELECT_COUNT:-0}"' --bind='focus:transform-preview-label:printf "[ %s/%s (%s) ]" "${FZF_MATCH_COUNT:-0}" "${FZF_TOTAL_COUNT:-0}" "${FZF_SELECT_COUNT:-0}"' \
+    \
+    --bind='j:down,k:up,g:first,G:last' \
+    --bind='ctrl-d:half-page-down,ctrl-u:half-page-up' \
     --bind='space:toggle+down' \
-    --bind='u:deselect-all' \
-    --bind='tab:ignore,btab:ignore' \
-    --bind='ctrl-r:toggle-search+clear-query' \
-    --bind="esc:clear-query+disable-search+change-prompt($prompt)" \
+    --bind='u:deselect-all' --bind="i:execute-silent(sudo am start --user '$USER_ID' -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:{2} >/dev/null 2>&1)" \
+    --bind="f:execute-silent(printf 'action freeze\n' > '$STATE_FILE')+accept" \
+    --bind="ctrl-f:execute-silent(printf 'action freeze\n' > '$STATE_FILE')+accept" \
+    --bind="e:execute-silent(printf 'action enable\n' > '$STATE_FILE')+accept" \
+    --bind="ctrl-t:execute-silent(printf 'action enable\n' > '$STATE_FILE')+accept" \
+    --bind="d:execute-silent(printf 'action uninstall\n' > '$STATE_FILE')+accept" \
+    --bind="x:execute-silent(printf 'action uninstall\n' > '$STATE_FILE')+accept" \
+    --bind="r:execute-silent(printf 'refresh\n' > '$STATE_FILE')+abort" \
+    --bind="s:execute-silent(printf 'filter %s\n' '$next_filter' > '$STATE_FILE')+abort" \
+    --bind="tab:execute-silent(printf 'filter %s\n' '$next_filter' > '$STATE_FILE')+abort" \
+    --bind="btab:execute-silent(printf 'filter %s\n' '$next_filter' > '$STATE_FILE')+abort" \
+    --bind="alt-u:execute-silent(printf 'filter user\n' > '$STATE_FILE')+abort" \
+    --bind="alt-y:execute-silent(printf 'filter system\n' > '$STATE_FILE')+abort" \
+    --bind="o:execute-silent(printf 'sort %s\n' '$next_sort' > '$STATE_FILE')+abort" \
+    --bind="alt-o:execute-silent(printf 'sort %s\n' '$next_sort' > '$STATE_FILE')+abort" \
+    --bind="1:execute-silent(awk -F '\t' '\$1 == 1 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="2:execute-silent(awk -F '\t' '\$1 == 2 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="3:execute-silent(awk -F '\t' '\$1 == 3 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="4:execute-silent(awk -F '\t' '\$1 == 4 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="5:execute-silent(awk -F '\t' '\$1 == 5 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="6:execute-silent(awk -F '\t' '\$1 == 6 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="7:execute-silent(awk -F '\t' '\$1 == 7 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="8:execute-silent(awk -F '\t' '\$1 == 8 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="9:execute-silent(awk -F '\t' '\$1 == 9 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-1:execute-silent(awk -F '\t' '\$1 == 1 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-2:execute-silent(awk -F '\t' '\$1 == 2 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-3:execute-silent(awk -F '\t' '\$1 == 3 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-4:execute-silent(awk -F '\t' '\$1 == 4 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-5:execute-silent(awk -F '\t' '\$1 == 5 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-6:execute-silent(awk -F '\t' '\$1 == 6 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-7:execute-silent(awk -F '\t' '\$1 == 7 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-8:execute-silent(awk -F '\t' '\$1 == 8 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="alt-9:execute-silent(awk -F '\t' '\$1 == 9 {print \"profile\", \$2}' '$SHORTCUT_FILE' > '$STATE_FILE')+abort" \
+    --bind="/:show-input+enable-search+clear-query+change-prompt(🔍 Search > )+unbind($NORMAL_KEYS)" \
+    --bind="$ctrl_r_bind" \
+    --bind="esc:clear-query+hide-input+disable-search+change-prompt()+rebind($NORMAL_KEYS)" \
+    --bind="$enter_bind" \
     --bind="?:execute('$SELF' --help)" \
     --bind="$click_bind" \
-    --bind='ctrl-q:abort')
+    --bind="q:execute-silent(printf 'quit\n' > '$STATE_FILE')+abort" \
+    --bind="ctrl-q:execute-silent(printf 'quit\n' > '$STATE_FILE')+abort")
 
   fzf_status=$?
 
-  # Header clicks communicate their destination through STATE_FILE.
   if [ -s "$STATE_FILE" ]; then
     read -r target_kind target_value < "$STATE_FILE"
     rm -f "$STATE_FILE"
@@ -344,63 +456,50 @@ while :; do
       profile)
         case "$target_value" in
           ''|*[!0-9]*) continue ;;
-          *) USER_ID=$target_value ;;
+          *)
+            if [ "$USER_ID" != "$target_value" ]; then
+              USER_ID=$target_value
+              NEED_REFRESH=1
+            fi
+            continue
+            ;;
         esac
         ;;
       filter)
         case "$target_value" in
-          user|system) FILTER=$target_value ;;
+          user|system)
+            if [ "$FILTER" != "$target_value" ]; then
+              FILTER=$target_value
+              NEED_REFRESH=1
+            fi
+            continue
+            ;;
         esac
         ;;
+      sort)
+        case "$target_value" in
+          latest|name)
+            SORT_MODE=$target_value
+            continue
+            ;;
+        esac
+        ;;
+      refresh)
+        NEED_REFRESH=1
+        continue
+        ;;
+      quit)
+        break
+        ;;
+      action)
+        [ "$fzf_status" -eq 0 ] || continue
+        selected=$(printf '%s\n' "$result" | awk -F '\t' 'NF >= 2 { print $2 }')
+        run_action "$target_value" "$USER_ID" "$selected"
+        continue
+        ;;
     esac
-
-    continue
   fi
 
   rm -f "$STATE_FILE"
-
-  # Quit on CTRL-Q / ESC / CTRL-C.
   [ "$fzf_status" -eq 0 ] || break
-
-  key=$(printf '%s\n' "$result" | sed -n '1p')
-  selected=$(printf '%s\n' "$result" |
-    sed '1d' |
-    awk -F '\t' 'NF >= 2 { print $2 }')
-
-  case "$key" in
-    alt-u)
-      FILTER=user
-      ;;
-
-    alt-y)
-      FILTER=system
-      ;;
-
-    alt-*)
-      target_user=$(awk -F '\t' -v key="$key" \
-        '$1 == key { print $2; exit }' "$SHORTCUT_FILE")
-
-      case "$target_user" in
-        ''|*[!0-9]*) break ;;
-        *) USER_ID=$target_user ;;
-      esac
-      ;;
-
-    ctrl-f)
-      run_action freeze "$USER_ID" "$selected"
-      ;;
-
-    ctrl-t)
-      run_action enable "$USER_ID" "$selected"
-      ;;
-
-    enter)
-      run_action uninstall "$USER_ID" "$selected"
-      ;;
-
-    *)
-      break
-      ;;
-  esac
 done
-
