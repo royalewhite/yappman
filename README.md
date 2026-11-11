@@ -78,7 +78,6 @@ Keep the three files together because the main script uses the preview and profi
 | `?` | Show help |
 | `q` / `CTRL-Q` | Quit |
 
-## How Appmant Handles App Operations
 
 ## Troubleshooting
 
