@@ -6,13 +6,13 @@
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SELF="$SCRIPT_DIR/appmant"
-PREVIEW="$SCRIPT_DIR/appman-preview"
-PROFILE_HELPER="$SCRIPT_DIR/appman-profiles"
+PREVIEW="$SCRIPT_DIR/appmant-preview"
+PROFILE_HELPER="$SCRIPT_DIR/appmant-profiles"
 
-STATE_FILE="$HOME/.appman.view.$$"
-PROFILE_FILE="$HOME/.appman.profiles.$$"
-TAB_MAP="$HOME/.appman.tabs.$$"
-SHORTCUT_FILE="$HOME/.appman.shortcuts.$$"
+STATE_FILE="$HOME/.appmant.view.$$"
+PROFILE_FILE="$HOME/.appmant.profiles.$$"
+TAB_MAP="$HOME/.appmant.tabs.$$"
+SHORTCUT_FILE="$HOME/.appmant.shortcuts.$$"
 
 USER_ID=0
 FILTER=user
