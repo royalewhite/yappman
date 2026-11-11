@@ -2,45 +2,24 @@ Appmant
 
 A terminal-based Android app manager for rooted devices, built for Termux.
 
-Appmant provides an interactive "fzf" (https://github.com/junegunn/fzf)-powered interface to browse and manage installed Android applications across users and profiles.
+Appmant gives you an interactive "fzf" interface to browse and manage installed Android applications across users and profiles.
 
 Switch between profiles, filter user and system apps, search packages, inspect app details, and manage enabled or frozen states—all from your terminal.
 
 Screenshots
 
 <p align="center">
-  <img src="assets/screenshot1.jpg" width="32%" alt="Appmant main interface">
-  <img src="assets/screenshot2.jpg" width="32%" alt="Appmant app management">
-  <img src="assets/screenshot3.jpg" width="32%" alt="Appmant profile and package view">
-</p>Features
-
-- Dynamic Android user and profile discovery.
-- User and system application filters.
-- Latest-first and alphabetical sorting.
-- Interactive package search.
-- Application previews and package information.
-- Freeze and enable applications.
-- Single and multi-selection.
-- Per-user application uninstall.
-- Android App Info shortcut.
-- Built-in keyboard help.
-
-Requirements
-
-- Rooted Android device.
-- "Termux" (https://github.com/termux/termux-app).
-- "fzf".
-- Working "sudo" command with root access.
-- "aapt2" (optional, for application-label extraction in previews).
-
-Installation
+  <img src="assets/screenshot1.jpg" width="32%" alt="Appmant main interface" />
+  <img src="assets/screenshot2.jpg" width="32%" alt="Appmant app management" />
+  <img src="assets/screenshot3.jpg" width="32%" alt="Appmant profile and package view" />
+</p>Installation
 
 Clone the repository:
 
 git clone https://github.com/royalewhite/Appmant.git
 cd Appmant
 
-Install "fzf":
+Install the required "fzf" package:
 
 pkg install fzf
 
@@ -50,15 +29,15 @@ Launch Appmant:
 
 Global Installation
 
-To launch Appmant from any directory:
+To launch Appmant from any directory, install all three executable files into Termux's binary directory:
 
 install -m 755 appmant appmant-preview appmant-profiles "$PREFIX/bin/"
 
-Launch it with:
+Now launch it with:
 
 appmant
 
-Keep all three executable files together. The main script relies on the preview and profile helper scripts.
+Keep the three files together because the main script uses the preview and profile helper scripts.
 
 Keyboard Controls
 
@@ -86,38 +65,31 @@ Header tabs| Switch profiles, filters, and sorting
 "?"| Show help
 "q" / "CTRL-Q"| Quit
 
-App Operations
-
-- Freeze: Disables an application for the selected Android user.
-- Enable: Re-enables an application for the selected Android user.
-- Uninstall: Removes an application for the selected user. This does not remove the underlying system APK.
+How Appmant Handles App Operations
 
 Troubleshooting
 
 Profile discovery fails
 
-Check root access and verify that "sudo" can execute Android package-manager commands.
+Check that root access works and that your "sudo" command can execute Android package-manager commands.
 
 The interface does not start
 
-Make sure "fzf" is installed and all three Appmant scripts are present.
+Make sure "fzf" is installed and all three Appmant scripts are present and executable.
 
 Application labels are missing in previews
 
-Install or configure "aapt2" at "$PREFIX/bin/aapt2". Package names and other available metadata can still be displayed without it.
+Install or configure "aapt2" at "$PREFIX/bin/aapt2".
 
-Compatibility
-
-Developed and tested on Samsung Galaxy M14 5G running Android 15 and One UI 7 with Termux and root access.
-
-Other rooted Android devices may work depending on their package-manager behavior.
+Package names and other available metadata can still be displayed without it.
 
 Contributing
 
-Found a bug or have an idea?
+Contributions, suggestions, and bug reports are welcome.
 
-- Open an "Issue" (https://github.com/royalewhite/Appmant/issues).
-- Submit a "Pull Request" (https://github.com/royalewhite/Appmant/pulls).
+Repository
+
+"github.com/royalewhite/Appmant" (https://github.com/royalewhite/Appmant)
 
 ---
 
