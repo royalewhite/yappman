@@ -3,11 +3,11 @@
 *.backup
 *.pre-profile.*
 
-# Appman runtime files
-.appman.view.*
-.appman.profiles.*
-.appman.tabs.*
-.appman.shortcuts.*
+# yappman runtime files
+.yappman.view.*
+.yappman.profiles.*
+.yappman.tabs.*
+.yappman.shortcuts.*
 
 # Editor files
 .DS_Store

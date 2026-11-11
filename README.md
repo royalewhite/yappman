@@ -1,17 +1,17 @@
-# Appmant
+# yappman
 
 A terminal-based Android app manager for rooted devices, built for Termux.
 
-Appmant gives you an interactive `fzf` interface to browse and manage installed Android applications across users and profiles.
+yappman gives you an interactive `fzf` interface to browse and manage installed Android applications across users and profiles.
 
 Switch between profiles, filter user and system apps, search packages, inspect app details, and manage enabled or frozen states—all from your terminal.
 
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshot1.jpg" width="32%" alt="Appmant main interface" />
-  <img src="assets/screenshot2.jpg" width="32%" alt="Appmant app management" />
-  <img src="assets/screenshot3.jpg" width="32%" alt="Appmant profile and package view" />
+  <img src="assets/screenshot1.jpg" width="32%" alt="yappman main interface" />
+  <img src="assets/screenshot2.jpg" width="32%" alt="yappman app management" />
+  <img src="assets/screenshot3.jpg" width="32%" alt="yappman profile and package view" />
 </p>
 
 ## Installation
@@ -19,8 +19,8 @@ Switch between profiles, filter user and system apps, search packages, inspect a
 Clone the repository:
 
 ```bash
-git clone https://github.com/royalewhite/Appmant.git
-cd Appmant
+git clone https://github.com/royalewhite/yappman.git
+cd yappman
 ```
 
 Install the required `fzf` package:
@@ -29,24 +29,24 @@ Install the required `fzf` package:
 pkg install fzf
 ```
 
-Launch Appmant:
+Launch yappman:
 
 ```bash
-./appmant
+./yappman
 ```
 
 ## Global Installation
 
-To launch Appmant from any directory, install all three executable files into Termux's binary directory:
+To launch yappman from any directory, install all three executable files into Termux's binary directory:
 
 ```bash
-install -m 755 appmant appmant-preview appmant-profiles "$PREFIX/bin/"
+install -m 755 yappman yappman-preview yappman-profiles "$PREFIX/bin/"
 ```
 
 Now launch it with:
 
 ```bash
-appmant
+yappman
 ```
 
 Keep the three files together because the main script uses the preview and profile helper scripts.
@@ -87,7 +87,7 @@ Check that root access works and that your `sudo` command can execute Android pa
 
 ### The interface does not start
 
-Make sure `fzf` is installed and all three Appmant scripts are present and executable.
+Make sure `fzf` is installed and all three yappman scripts are present and executable.
 
 ### Application labels are missing in previews
 
@@ -101,8 +101,8 @@ Contributions, suggestions, and bug reports are welcome.
 
 ## Repository
 
-[github.com/royalewhite/Appmant](https://github.com/royalewhite/Appmant)
+[github.com/royalewhite/yappman](https://github.com/royalewhite/yappman)
 
 ---
 
-**Appmant** — Android app management, straight from your terminal. 👾
+**yappman** — Android app management, straight from your terminal. 👾

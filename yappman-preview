@@ -2,7 +2,7 @@
 
 if [ "$1" = '--help' ]; then
   cat <<'HELP'
-Appman preview
+yappman preview
 
 The preview shows package identity, APK label, version, installation
 metadata, and enabled/disabled state for the currently selected profile.

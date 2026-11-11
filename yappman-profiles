@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/sh
 
-# Appman — Android profile discovery
+# yappman — Android profile discovery
 # Output: ID<TAB>LABEL<TAB>TYPE<TAB>NAME
 
 output=$(sudo cmd user list -v 2>/dev/null)

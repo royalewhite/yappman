@@ -1,18 +1,18 @@
 #!/data/data/com.termux/files/usr/bin/sh
 
-# Appmant — Android package manager for Termux + root
+# yappman — Android package manager for Termux + root
 # Dynamic Android profile discovery.
 # Default: Android user 0, third-party applications, sorted by Latest.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-SELF="$SCRIPT_DIR/appmant"
-PREVIEW="$SCRIPT_DIR/appmant-preview"
-PROFILE_HELPER="$SCRIPT_DIR/appmant-profiles"
+SELF="$SCRIPT_DIR/yappman"
+PREVIEW="$SCRIPT_DIR/yappman-preview"
+PROFILE_HELPER="$SCRIPT_DIR/yappman-profiles"
 
-STATE_FILE="$HOME/.appmant.view.$$"
-PROFILE_FILE="$HOME/.appmant.profiles.$$"
-TAB_MAP="$HOME/.appmant.tabs.$$"
-SHORTCUT_FILE="$HOME/.appmant.shortcuts.$$"
+STATE_FILE="$HOME/.yappman.view.$$"
+PROFILE_FILE="$HOME/.yappman.profiles.$$"
+TAB_MAP="$HOME/.yappman.tabs.$$"
+SHORTCUT_FILE="$HOME/.yappman.shortcuts.$$"
 
 USER_ID=0
 FILTER=user
@@ -30,17 +30,17 @@ trap cleanup 0 1 2 15
 # --------------------------------------------------
 
 if [ ! -x "$PROFILE_HELPER" ]; then
-  printf 'Appman: profile helper is missing or not executable.\n'
+  printf 'yappman: profile helper is missing or not executable.\n'
   exit 1
 fi
 
 if ! "$PROFILE_HELPER" > "$PROFILE_FILE" || [ ! -s "$PROFILE_FILE" ]; then
-  printf 'Appman: Android profile discovery failed.\n'
+  printf 'yappman: Android profile discovery failed.\n'
   exit 1
 fi
 
 if ! grep -q '^0[[:space:]]' "$PROFILE_FILE"; then
-  printf 'Appman: Android user 0 was not discovered. Refusing to start.\n'
+  printf 'yappman: Android user 0 was not discovered. Refusing to start.\n'
   exit 1
 fi
 
@@ -88,7 +88,7 @@ add_tab sort latest LATEST
 add_tab sort name NAME
 
 if [ "$PROFILE_COUNT" -eq 0 ]; then
-  printf 'Appman: no usable Android profiles found.\n'
+  printf 'yappman: no usable Android profiles found.\n'
   exit 1
 fi
 
@@ -189,7 +189,7 @@ get_profile_name() {
 
 show_help() {
   clear
-  printf '%s\n' '╭────────────────────── APPMAN HELP ──────────────────────╮'
+  printf '%s\n' '╭────────────────────── YAPPMAN HELP ──────────────────────╮'
   printf '%s\n' '│ PROFILE NAVIGATION                                       │'
 
   index=0
@@ -237,7 +237,7 @@ show_help() {
 ╰────────────────────────────────────────────────────────────╯
 HELP
 
-  printf '\nPress ENTER to return to Appman...'
+  printf '\nPress ENTER to return to yappman...'
   read -r _ </dev/tty
 }
 
