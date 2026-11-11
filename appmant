@@ -1,11 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/sh
 
-# Appman — Android package manager for Termux + root
+# Appmant — Android package manager for Termux + root
 # Dynamic Android profile discovery.
 # Default: Android user 0, third-party applications, sorted by Latest.
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-SELF="$SCRIPT_DIR/appman"
+SELF="$SCRIPT_DIR/appmant"
 PREVIEW="$SCRIPT_DIR/appman-preview"
 PROFILE_HELPER="$SCRIPT_DIR/appman-profiles"
 
